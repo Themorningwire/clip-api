@@ -48,7 +48,15 @@ function requireApiKey(req, res, next) {
   if (!API_KEY) {
     return res.status(500).json({ error: "Server misconfigured: CLIP_API_KEY not set" });
   }
-  const key = req.header("x-api-key");
+  // Accept the key from either an x-api-key header or an
+  // "Authorization: Bearer <key>" header, since different callers use
+  // different conventions.
+  const headerKey = req.header("x-api-key");
+  const authHeader = req.header("authorization") || "";
+  const bearerKey = authHeader.toLowerCase().startsWith("bearer ")
+    ? authHeader.slice(7).trim()
+    : null;
+  const key = headerKey || bearerKey;
   if (key !== API_KEY) {
     return res.status(401).json({ error: "Invalid or missing API key" });
   }
@@ -164,10 +172,19 @@ async function processJob(jobId) {
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.post("/jobs", requireApiKey, async (req, res) => {
-  const { youtube_url, start_time, end_time, include_subtitles } = req.body || {};
+  const body = req.body || {};
+  // Accept either naming convention: { youtube_url, start_time, end_time,
+  // include_subtitles } or the shorter { url, start, end, subtitles }.
+  const youtube_url = body.youtube_url ?? body.url;
+  const start_time = body.start_time ?? body.start;
+  const end_time = body.end_time ?? body.end;
+  const include_subtitles = body.include_subtitles ?? body.subtitles ?? false;
 
   if (!youtube_url || !isValidYoutubeUrl(youtube_url)) {
-    return res.status(400).json({ error: "Missing or invalid youtube_url" });
+    return res.status(400).json({ error: "Missing or invalid youtube_url (accepts 'youtube_url' or 'url')" });
+  }
+  if (start_time === undefined || end_time === undefined) {
+    return res.status(400).json({ error: "Missing start/end time (accepts 'start_time'/'end_time' or 'start'/'end')" });
   }
 
   let start_seconds, end_seconds;
