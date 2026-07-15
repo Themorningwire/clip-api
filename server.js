@@ -171,7 +171,7 @@ async function processJob(jobId) {
 
 app.get("/health", (req, res) => res.json({ ok: true }));
 
-app.post("/jobs", requireApiKey, async (req, res) => {
+app.post(["/jobs", "/"], requireApiKey, async (req, res) => {
   const body = req.body || {};
   // Accept either naming convention: { youtube_url, start_time, end_time,
   // include_subtitles } or the shorter { url, start, end, subtitles }.
