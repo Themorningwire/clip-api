@@ -128,16 +128,17 @@ async function processJob(jobId) {
 
     const outputTemplate = path.join(jobDir, "clip.%(ext)s");
 
-    const args = [
-      youtube_url,
-      "--download-sections", section,
-      "--force-keyframes-at-cuts",
-      "-f", "bv*+ba/b",
-      "--merge-output-format", "mp4",
-      "-o", outputTemplate,
-      "--no-playlist",
-      "--newline",
-    ];
+const args = [
+  youtube_url,
+  "--download-sections", section,
+  "--force-keyframes-at-cuts",
+  "-f", "bv*+ba/b",
+  "--merge-output-format", "mp4",
+  "-o", outputTemplate,
+  "--no-playlist",
+  "--newline",
+  "--cookies", path.join(__dirname, "cookies.txt"),   // <-- add this
+];
 
     if (include_subtitles) {
       args.push(
