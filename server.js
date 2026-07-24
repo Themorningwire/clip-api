@@ -173,11 +173,6 @@ async function processJob(jobId) {
       args.push("--cookies", COOKIES_PATH);
     }
 
-    // YouTube's newer bot-detection also blocks requests that don't look
-    // like they come from a real client; the android client tends to be
-    // more permissive for cloud-server IPs than the default web client.
-    args.push("--extractor-args", "youtube:player_client=android");
-
     await runCommand("yt-dlp", args);
 
     const files = fs.readdirSync(jobDir);
