@@ -15,6 +15,13 @@
  *   PUBLIC_BASE_URL- optional. Base URL used to build file download links
  *                    (e.g. https://your-app.up.railway.app). If unset, the
  *                    server infers it from the request.
+ *   YTDLP_COOKIES  - optional but usually required in practice. The full
+ *                    contents of a Netscape-format cookies.txt file exported
+ *                    from a real, logged-in YouTube browser session. Without
+ *                    this, YouTube frequently blocks cloud-server requests
+ *                    with "Sign in to confirm you're not a bot". Paste the
+ *                    whole file's text as this env var's value; the server
+ *                    writes it to disk at startup and passes it to yt-dlp.
  *
  * Requires yt-dlp and ffmpeg to be installed in the deploy environment.
  * See Dockerfile for a ready-made image that installs both.
@@ -37,6 +44,20 @@ const WORK_DIR = path.join(__dirname, "jobs");
 const MAX_CLIP_SECONDS = 60 * 30; // 30 min safety cap
 
 if (!fs.existsSync(WORK_DIR)) fs.mkdirSync(WORK_DIR, { recursive: true });
+
+// If YTDLP_COOKIES is set, write it out once at startup so yt-dlp can use
+// it on every request via --cookies.
+const COOKIES_PATH = path.join(__dirname, "cookies.txt");
+let COOKIES_AVAILABLE = false;
+if (process.env.YTDLP_COOKIES) {
+  try {
+    fs.writeFileSync(COOKIES_PATH, process.env.YTDLP_COOKIES, "utf8");
+    COOKIES_AVAILABLE = true;
+    console.log("Loaded YTDLP_COOKIES -> cookies.txt");
+  } catch (e) {
+    console.error("Failed to write cookies file:", e.message);
+  }
+}
 
 // In-memory job store. Fine for a small single-instance deploy.
 // Swap for Redis/DB if you scale to multiple instances.
@@ -128,17 +149,16 @@ async function processJob(jobId) {
 
     const outputTemplate = path.join(jobDir, "clip.%(ext)s");
 
-const args = [
-  youtube_url,
-  "--download-sections", section,
-  "--force-keyframes-at-cuts",
-  "-f", "bv*+ba/b",
-  "--merge-output-format", "mp4",
-  "-o", outputTemplate,
-  "--no-playlist",
-  "--newline",
-  "--cookies", path.join(__dirname, "cookies.txt"),   // <-- add this
-];
+    const args = [
+      youtube_url,
+      "--download-sections", section,
+      "--force-keyframes-at-cuts",
+      "-f", "bv*+ba/b",
+      "--merge-output-format", "mp4",
+      "-o", outputTemplate,
+      "--no-playlist",
+      "--newline",
+    ];
 
     if (include_subtitles) {
       args.push(
@@ -148,6 +168,15 @@ const args = [
         "--convert-subs", "srt"
       );
     }
+
+    if (COOKIES_AVAILABLE) {
+      args.push("--cookies", COOKIES_PATH);
+    }
+
+    // YouTube's newer bot-detection also blocks requests that don't look
+    // like they come from a real client; the android client tends to be
+    // more permissive for cloud-server IPs than the default web client.
+    args.push("--extractor-args", "youtube:player_client=android");
 
     await runCommand("yt-dlp", args);
 
